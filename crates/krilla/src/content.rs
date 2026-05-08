@@ -708,7 +708,7 @@ impl ContentBuilder {
                         text,
                         reversed,
                         sc.serialize_settings()
-                            .validator()
+                            .validators()
                             .requires_codepoint_mappings(),
                         context_color,
                         font_container.clone(),

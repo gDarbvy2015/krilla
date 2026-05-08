@@ -88,7 +88,7 @@ impl Annotation {
             || sc
                 .serialize_settings()
                 .configuration
-                .validator()
+                .validators()
                 .requires_annotation_flags()
         {
             annotation.flags(AnnotationFlags::PRINT);

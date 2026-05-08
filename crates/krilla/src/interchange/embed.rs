@@ -119,11 +119,7 @@ impl Cacheable for EmbeddedFile {
 
         ef.finish();
 
-        if sc
-            .serialize_settings()
-            .validator()
-            .allows_associated_files()
-        {
+        if sc.serialize_settings().supports_associated_files() {
             file_spec.association_kind(self.association_kind.to_pdf());
         }
 

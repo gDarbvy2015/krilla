@@ -128,7 +128,10 @@ impl ChunkContainer {
         sc.serialize_settings().pdf_version().set_version(&mut pdf);
 
         if sc.serialize_settings().ascii_compatible
-            && !sc.serialize_settings().validator().requires_binary_header()
+            && !sc
+                .serialize_settings()
+                .validators()
+                .requires_binary_header()
         {
             pdf.set_binary_marker(b"AAAA")
         }
@@ -176,7 +179,9 @@ impl ChunkContainer {
             metadata.serialize_xmp_metadata(&mut xmp, sc, &instance_id);
         }
 
-        sc.serialize_settings().validator().write_xmp(&mut xmp);
+        let settings = sc.serialize_settings();
+        let validators = settings.validators();
+        validators.write_xmp(&mut xmp);
 
         xmp.num_pages(sc.page_infos().len() as u32);
         xmp.format("application/pdf");
@@ -254,7 +259,7 @@ impl ChunkContainer {
 
             let write_doc_title = sc
                 .serialize_settings()
-                .validator()
+                .validators()
                 .requires_display_doc_title();
             let text_direction = self.metadata.as_ref().and_then(|m| m.text_direction);
 
@@ -284,10 +289,10 @@ impl ChunkContainer {
                 catalog.outlines(remapper[&ol.0]);
             }
 
-            let write_embedded_files = sc
-                .serialize_settings()
-                .validator()
-                .write_embedded_files(self.non_stream.embedded_files.len() == 0);
+            let settings = sc.serialize_settings();
+            let validators = settings.validators();
+            let write_embedded_files = self.non_stream.embedded_files.len() != 0
+                || validators.requires_embedded_files_when_empty();
 
             if !named_destinations.is_empty() || write_embedded_files {
                 // Cannot use pdf-writer API here because it requires Ref's, while
@@ -329,12 +334,7 @@ impl ChunkContainer {
                 }
             }
 
-            if !embedded_files.is_empty()
-                && sc
-                    .serialize_settings()
-                    .validator()
-                    .allows_associated_files()
-            {
+            if !embedded_files.is_empty() && settings.supports_associated_files() {
                 let mut associated_files = catalog.insert(Name(b"AF")).array().typed();
                 for _ref in embedded_files.values() {
                     associated_files.item(remapper[_ref]).finish();

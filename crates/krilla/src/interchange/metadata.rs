@@ -201,7 +201,7 @@ impl Metadata {
 
             if sc
                 .serialize_settings()
-                .validator()
+                .validators()
                 .requires_file_provenance_information()
             {
                 let mut history = xmp.history();
@@ -213,7 +213,7 @@ impl Metadata {
 
                 if !sc
                     .serialize_settings()
-                    .validator()
+                    .validators()
                     .prohibits_instance_id_in_xmp_metadata()
                 {
                     saved.instance_id(&format!("{instance_id}_source"));
@@ -233,7 +233,7 @@ impl Metadata {
 
                 if !sc
                     .serialize_settings()
-                    .validator()
+                    .validators()
                     .prohibits_instance_id_in_xmp_metadata()
                 {
                     converted.instance_id(&format!("{instance_id}_source"));
@@ -250,7 +250,7 @@ impl Metadata {
         pdf: &mut Pdf,
         config: Configuration,
     ) {
-        if !config.validator().allows_info_dict() {
+        if config.validators().prohibits_info_dict() {
             return;
         }
 

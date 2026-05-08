@@ -20,8 +20,8 @@ use crate::embed::{embedded_file_impl, file_1};
 use crate::{
     blue_fill, cmyk_fill, dummy_text_with_spans, green_fill, load_jpg_image, load_png_image, loc,
     metadata_1, rect_to_path, red_fill, settings_13, settings_15, settings_19, settings_20,
-    settings_23, settings_24, settings_7, settings_8, settings_9, stops_with_2_solid_1,
-    youtube_link, NOTO_SANS,
+    settings_23, settings_24, settings_32, settings_7, settings_8, settings_9,
+    stops_with_2_solid_1, validation_errors, youtube_link, NOTO_SANS,
 };
 use crate::{Document, SerializeSettings};
 
@@ -66,10 +66,8 @@ pub fn validate_pdf_a_q_nesting_28(document: &mut Document) {
 pub fn validate_pdf_a_q_nesting_28() {
     let document = q_nesting_impl(settings_7());
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::TooHighQNestingLevel
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::TooHighQNestingLevel]
     );
 }
 
@@ -81,10 +79,8 @@ pub fn validate_pdf_a_string_length() {
         .creation_date(DateTime::new(2021));
     document.set_metadata(metadata);
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::TooLongString
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::TooLongString]
     );
 }
 
@@ -129,10 +125,8 @@ fn validate_pdf_a_postscript() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::ContainsPostScript(None)
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::ContainsPostScript(None)]
     )
 }
 
@@ -161,10 +155,8 @@ fn validate_pdf_a_missing_cmyk() {
     cmyk_document_impl(&mut document);
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::MissingCMYKProfile
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::MissingCMYKProfile]
     )
 }
 
@@ -197,10 +189,12 @@ fn validate_pdf_a_notdef_glyph() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::ContainsNotDefGlyph(font, None, "你".to_string())
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::ContainsNotDefGlyph(
+            font,
+            None,
+            "你".to_string()
+        )]
     )
 }
 
@@ -230,10 +224,12 @@ fn validate_pdfa2u_text_with_location() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::ContainsNotDefGlyph(font, Some(loc(4)), "i".to_string())
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::ContainsNotDefGlyph(
+            font,
+            Some(loc(4)),
+            "i".to_string()
+        )]
     )
 }
 
@@ -266,14 +262,14 @@ fn validate_pdfa1b_transparency_with_location() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
+        validation_errors(document.finish()),
+        vec![
             ValidationError::Transparency(Some(loc(4))),
             ValidationError::Transparency(Some(loc(6))),
             // Note that we don't have 7 here, even though we should in theory. The reason is
             // that since we cache graphics states, only the first time we serialize it will
             // it trigger the validation error. Not optimal, but changing that would be a pain.
-        ]))
+        ]
     )
 }
 
@@ -372,10 +368,13 @@ fn validate_pdfu_invalid_codepoint() {
     invalid_codepoint_impl(&mut document, font.clone(), "A\u{FEFF}B");
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::InvalidCodepointMapping(font, GlyphId::new(2), '\u{FEFF}', None)
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::InvalidCodepointMapping(
+            font,
+            GlyphId::new(2),
+            '\u{FEFF}',
+            None
+        )]
     )
 }
 
@@ -408,16 +407,13 @@ fn validate_pdfa_no_codepoint() {
     surface.finish();
     page.finish();
 
-    match document.finish() {
-        Err(KrillaError::Validation(errors)) => {
-            assert!(errors.contains(&ValidationError::NoCodepointMapping(
-                font,
-                GlyphId::new(1),
-                None
-            )));
-        }
-        _ => panic!("Expected validation error"),
-    }
+    assert!(
+        validation_errors(document.finish()).contains(&ValidationError::NoCodepointMapping(
+            font,
+            GlyphId::new(1),
+            None
+        ))
+    );
 }
 
 #[test]
@@ -431,10 +427,13 @@ fn validate_pdfa_private_unicode_codepoint() {
     invalid_codepoint_impl(&mut document, font.clone(), "A\u{E022}B");
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::UnicodePrivateArea(font, GlyphId::new(2), '\u{E022}', None)
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::UnicodePrivateArea(
+            font,
+            GlyphId::new(2),
+            '\u{E022}',
+            None
+        )]
     )
 }
 
@@ -520,12 +519,8 @@ fn validate_pdf_ua1_empty_annotation_alt() {
     tag_tree.push(tag_group);
     document.set_tag_tree(tag_tree);
 
-    match document.finish() {
-        Err(KrillaError::Validation(errors)) => {
-            assert!(errors.contains(&ValidationError::MissingAnnotationAltText(Some(annot_loc))));
-        }
-        _ => panic!("Expected validation error"),
-    }
+    assert!(validation_errors(document.finish())
+        .contains(&ValidationError::MissingAnnotationAltText(Some(annot_loc))));
 }
 
 #[test]
@@ -561,12 +556,8 @@ fn validate_pdf_ua1_empty_alt() {
     tag_tree.push(tag_group);
     document.set_tag_tree(tag_tree);
 
-    match document.finish() {
-        Err(KrillaError::Validation(errors)) => {
-            assert!(errors.contains(&ValidationError::MissingAltText(Some(formula_loc))));
-        }
-        _ => panic!("Expected validation error"),
-    }
+    assert!(validation_errors(document.finish())
+        .contains(&ValidationError::MissingAltText(Some(formula_loc))));
 }
 
 #[snapshot(document, settings_15)]
@@ -663,13 +654,13 @@ fn validate_pdf_ua1_missing_requirements() {
     document.set_tag_tree(tag_tree);
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
+        validation_errors(document.finish()),
+        vec![
             ValidationError::MissingDocumentOutline,
             ValidationError::MissingAnnotationAltText(Some(annot_loc)),
             ValidationError::MissingAltText(Some(formula_loc)),
             ValidationError::NoDocumentTitle
-        ]))
+        ]
     )
 }
 
@@ -734,10 +725,8 @@ fn validate_pdf_a1_no_transparency() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::Transparency(None)
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::Transparency(None)]
     )
 }
 
@@ -757,10 +746,8 @@ fn validate_pdf_a1_no_image_transparency() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::Transparency(None)
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::Transparency(None)]
     )
 }
 
@@ -783,11 +770,11 @@ fn validate_pdf_a1_limits() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
+        validation_errors(document.finish()),
+        vec![
             ValidationError::TooLargeFloat,
             ValidationError::TooLongArray,
-        ]))
+        ]
     )
 }
 
@@ -797,10 +784,8 @@ fn validate_pdf_a3_a_no_tag_tree() {
     document.set_metadata(metadata_1());
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::MissingTagging
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::MissingTagging]
     )
 }
 
@@ -813,11 +798,11 @@ fn validate_pdf_a3_missing_fields() {
     d.embed_file(f1);
 
     assert_eq!(
-        d.finish(),
-        Err(KrillaError::Validation(vec![
+        validation_errors(d.finish()),
+        vec![
             ValidationError::EmbeddedFile(EmbedError::MissingDate, None),
             ValidationError::EmbeddedFile(EmbedError::MissingDescription, None)
-        ]))
+        ]
     )
 }
 
@@ -870,10 +855,8 @@ fn validate_pdf_a1_b_cmyk_image_without_icc_profile() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::MissingCMYKProfile
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::MissingCMYKProfile]
     );
 }
 
@@ -925,11 +908,11 @@ fn validate_deduplicate_errors() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
+        validation_errors(document.finish()),
+        vec![
             ValidationError::Transparency(None),
             ValidationError::Transparency(Some(loc(2)))
-        ]))
+        ]
     );
 }
 
@@ -972,11 +955,99 @@ fn validate_inconsistent_separation_fallback() {
     page.finish();
 
     assert_eq!(
-        document.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::InconsistentSeparationFallback(
-                separation::SeparationColorant::Custom("PANTONE 185 C".to_string())
-            )
-        ]))
+        validation_errors(document.finish()),
+        vec![ValidationError::InconsistentSeparationFallback(
+            separation::SeparationColorant::Custom("PANTONE 185 C".to_string())
+        )]
     );
+}
+
+#[snapshot(document)]
+fn no_validators_embedded_file_no_af(d: &mut Document) {
+    // Embedded files are written but no AF (associated files) entry is
+    // produced, because an empty validator set means `allows_associated_files`
+    // is vacuously false.
+    embedded_file_impl(d);
+}
+
+// A-3b + UA-1: Even though neither PDF 1.7 nor PDF/UA-1 specify associated
+// files, A-3b adds them, so the AF entry should be written.
+#[test]
+fn validate_multi_validator_embedded_file_af() {
+    let mut d = Document::new_with(settings_32());
+
+    let metadata = Metadata::new()
+        .language("en".to_string())
+        .title("a nice title".to_string())
+        .creation_date(DateTime::new(2001));
+    d.set_metadata(metadata);
+    d.set_tag_tree(TagTree::new());
+    d.set_outline(Outline::new());
+
+    d.embed_file(file_1());
+
+    let pdf_bytes = d.finish().expect("expected valid PDF");
+    // /AF is the associated files key; it must be absent since UA-1 does not
+    // allow it.
+    assert!(
+        pdf_bytes.windows(3).any(|w| w == b"/AF"),
+        "unexpected lack of /AF entry in PDF output"
+    );
+}
+
+// A-3b + UA-1: UA-1 requires an outline; A-3b does not.
+#[test]
+fn validate_multi_validator_ua1_prohibits_missing_outline() {
+    let mut document = Document::new_with(settings_32());
+    let metadata = Metadata::new()
+        .language("en".to_string())
+        .title("title".to_string())
+        .creation_date(DateTime::new(2001));
+    document.set_metadata(metadata);
+    document.set_tag_tree(TagTree::new());
+    // No outline is set — this is fine for A3_B alone, but UA1 requires it.
+
+    let mut page = document.start_page();
+    page.surface().finish();
+    page.finish();
+
+    assert_eq!(
+        validation_errors(document.finish()),
+        vec![ValidationError::MissingDocumentOutline]
+    );
+}
+
+#[snapshot(document, settings_32)]
+fn validate_multi_validator_pdf_a3b_pdf_ua1_full_example(document: &mut Document) {
+    let mut page = document.start_page();
+    let mut surface = page.surface();
+
+    let font_data = NOTO_SANS.clone();
+    let font = Font::new(font_data, 0).unwrap();
+
+    let id1 = surface.start_tagged(ContentTag::Span(SpanTag::empty()));
+    surface.draw_text(
+        Point::from_xy(0.0, 100.0),
+        font,
+        20.0,
+        "Hello, PDF/A-3b + PDF/UA-1",
+        false,
+        TextDirection::Auto,
+    );
+    surface.end_tagged();
+
+    surface.finish();
+    page.finish();
+
+    let mut tag_tree = TagTree::new();
+    tag_tree.push(id1);
+    document.set_tag_tree(tag_tree);
+
+    let metadata = Metadata::new()
+        .language("en".to_string())
+        .title("a nice title".to_string())
+        .creation_date(DateTime::new(2001));
+    document.set_metadata(metadata);
+
+    document.set_outline(Outline::new());
 }

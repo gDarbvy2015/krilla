@@ -5,7 +5,7 @@ use krilla::metadata::{DateTime, Metadata};
 use krilla::tagging::TagTree;
 use krilla_macros::snapshot;
 
-use crate::{metadata_1, settings_10, Document};
+use crate::{metadata_1, settings_10, validation_errors, Document};
 use crate::{settings_13, settings_23, ASSETS_PATH};
 
 pub(crate) fn file_1() -> EmbeddedFile {
@@ -136,7 +136,7 @@ pub(crate) fn embedded_file_impl(d: &mut Document) {
 
 #[snapshot(document, settings_25)]
 fn embedded_file_pdf_20(d: &mut Document) {
-    // Technically PDF 2.0 supports associated files, but we only use them for PDF/A-3.
+    // PDF 2.0 supports associated files, so we expect them to appear.
     embedded_file_impl(d)
 }
 
@@ -163,10 +163,8 @@ fn embedded_file_pdf_a2() {
     d.embed_file(f1);
 
     assert_eq!(
-        d.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::EmbeddedFile(EmbedError::Existence, None),
-        ]))
+        validation_errors(d.finish()),
+        vec![ValidationError::EmbeddedFile(EmbedError::Existence, None),]
     )
 }
 
@@ -197,9 +195,7 @@ fn embedded_file_pdf_a3b_missing_date() {
     d.embed_file(f1);
 
     assert_eq!(
-        d.finish(),
-        Err(KrillaError::Validation(vec![
-            ValidationError::EmbeddedFile(EmbedError::MissingDate, None),
-        ]))
+        validation_errors(d.finish()),
+        vec![ValidationError::EmbeddedFile(EmbedError::MissingDate, None),]
     )
 }
