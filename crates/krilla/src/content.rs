@@ -141,7 +141,10 @@ impl ContentBuilder {
             properties.pairs([(Name(b"MCID"), mcid)]);
         }
 
-        tag.write_properties(sc, properties);
+        // Page height extracted from transform and passed to function to allow
+        // its dependants to flip the y-axis, mirroring Krilla conventions.
+        let page_height = self.root_transform.ty();
+        tag.write_properties(sc, properties, page_height);
     }
 
     pub(crate) fn end_marked_content(&mut self) {
