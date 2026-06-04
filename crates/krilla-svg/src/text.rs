@@ -1,11 +1,17 @@
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
+use fontdb::Database;
 use krilla::color::rgb;
 use krilla::geom::Point;
 use krilla::num::NormalizedF32;
 use krilla::paint::{Fill, Stroke};
 use krilla::surface::Surface;
 use krilla::text::{Font, GlyphId, KrillaGlyph};
+use skrifa::{FontRef, MetadataProvider};
+use smallvec::SmallVec;
 use usvg::tiny_skia_path::Transform;
-use usvg::PaintOrder;
+use usvg::{FontOpticalSizing, FontVariation, PaintOrder};
 
 use crate::util::{convert_fill, convert_stroke, UsvgTransformExt};
 use crate::{path, ProcessContext};
@@ -31,7 +37,7 @@ pub(crate) fn render(
 
         for glyph in &span.positioned_glyphs {
             // Ignore glyph if font can't be fetched.
-            let Some(font) = process_context.fonts.get(&glyph.font).cloned() else {
+            let Some(font) = process_context.fonts.retrieve(span, glyph.font) else {
                 continue;
             };
 
@@ -138,5 +144,89 @@ pub(crate) fn render(
         if let Some(line_through) = &span.line_through {
             path::render(line_through, surface, process_context);
         }
+    }
+}
+
+/// Manages the krilla fonts used by an SVG.
+pub struct Fonts<'a> {
+    db: &'a mut Database,
+    fonts: HashMap<FontInstance, Option<Font>>,
+    supported_axes: HashMap<fontdb::ID, SmallVec<[[u8; 4]; 2]>>,
+}
+
+/// Identifies a font at specific variation coordinates.
+type FontInstance = (fontdb::ID, FontVariations);
+type FontVariations = SmallVec<[FontVariation; 2]>;
+
+impl<'a> Fonts<'a> {
+    pub fn new(db: &'a mut Database) -> Self {
+        Self {
+            db,
+            fonts: HashMap::new(),
+            supported_axes: HashMap::new(),
+        }
+    }
+
+    /// Retrieves the font identified by `id` from the cache or loads it.
+    fn retrieve(&mut self, span: &usvg::layout::Span, id: fontdb::ID) -> Option<Font> {
+        let variations = self.resolve_variations(span, id);
+        match self.fonts.entry((id, variations)) {
+            Entry::Occupied(entry) => entry.get().clone(),
+            Entry::Vacant(entry) => {
+                let font = if let Some((font_data, index)) =
+                    unsafe { self.db.make_shared_face_data(id) }
+                {
+                    let variations = &entry.key().1;
+                    let coords: SmallVec<[_; 2]> = variations
+                        .iter()
+                        .map(|var| (krilla::text::Tag::new(&var.tag), var.value))
+                        .collect();
+                    Font::new_variable(font_data.into(), index, &coords)
+                } else {
+                    None
+                };
+
+                entry.insert(font.clone());
+                font
+            }
+        }
+    }
+
+    /// Resolves which variations are applicable for the given font (filtering out undefined axis
+    /// values and taking into account optical sizing).
+    fn resolve_variations(&mut self, span: &usvg::layout::Span, id: fontdb::ID) -> FontVariations {
+        let supported_axes = self.supported_axes.entry(id).or_insert_with(|| {
+            self.db
+                .with_face_data(id, |data, index| {
+                    FontRef::from_index(data, index)
+                        .into_iter()
+                        .flat_map(|font| font.axes().iter())
+                        .map(|axis| axis.tag().to_be_bytes())
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        let is_supported = |tag| supported_axes.contains(tag);
+
+        let mut variations: FontVariations = span
+            .variations
+            .iter()
+            .filter(|var| is_supported(&var.tag))
+            .copied()
+            .collect();
+
+        // Set the font size for optical sizing if desired, supported, and not manually set.
+        const OPSZ: &[u8; 4] = b"opsz";
+        if span.font_optical_sizing == FontOpticalSizing::Auto
+            && is_supported(OPSZ)
+            && !variations.iter().any(|v| v.tag == *OPSZ)
+        {
+            variations.push(FontVariation {
+                tag: *OPSZ,
+                value: span.font_size.get(),
+            });
+        }
+
+        variations
     }
 }
